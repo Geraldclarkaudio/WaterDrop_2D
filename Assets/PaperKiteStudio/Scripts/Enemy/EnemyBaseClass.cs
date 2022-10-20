@@ -14,10 +14,8 @@ namespace PaperKiteStudio.DroppysWaterTrials
         protected GameObject lootDrop;
 
         [SerializeField]
-        protected List<Transform> wayPoints;
-
-        [SerializeField]
-        protected int currentTarget;
+        protected Transform[] wayPoints;
+        protected Vector3 currentTarget;
         [SerializeField]
         protected bool reversing;
         [SerializeField]
@@ -31,14 +29,14 @@ namespace PaperKiteStudio.DroppysWaterTrials
         protected bool attacking;
         [SerializeField]
         protected GameObject hitBox;
-
         [SerializeField]
-        protected float timeRemaining;
+        protected float distanceToPlayer;
 
         [SerializeField]
         protected enum State
         {
             Patrolling,
+            Idle,
             Hit,
             Chasing,
             Attacking,
@@ -50,19 +48,25 @@ namespace PaperKiteStudio.DroppysWaterTrials
 
         private RigidBodyMovement player;
 
-        public virtual void Start()
+        public virtual void Init()
         {
             player = GameObject.Find("Player").GetComponent<RigidBodyMovement>();
             _renderer = GetComponentInChildren<SpriteRenderer>();
             anim = GetComponentInChildren<Animator>();
         }
 
+        public virtual void Start()
+        {
+            Init();
+        }
+
         public virtual void Update()
         {
+            distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
             switch (state)
             {
                 case State.Patrolling:
-                    Patrol();
+                    WaypointNav();
                     break;
                 case State.Hit:
                     Hit();
@@ -82,11 +86,6 @@ namespace PaperKiteStudio.DroppysWaterTrials
             if (_renderer.flipX == false)
             {
                 hitBox.transform.position = new Vector3(transform.position.x + 3, transform.position.y, transform.position.z);
-            }
-
-            if (timeRemaining > 0)
-            {
-                timeRemaining -= Time.deltaTime;
             }
         }
 
@@ -110,7 +109,7 @@ namespace PaperKiteStudio.DroppysWaterTrials
 
         IEnumerator HitWait()
         {
-            float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
+            //float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
 
             //anim.SetBool("Patrolling", false);
             yield return new WaitForSeconds(Random.Range(1.0f, 1.5f));
@@ -134,86 +133,64 @@ namespace PaperKiteStudio.DroppysWaterTrials
 
         }
 
-        public virtual void Patrol()
+        public virtual void WaypointNav()
         {
-            float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
-            hit = false;
-
-            if (distanceToPlayer <= 10 && distanceToPlayer > 3)
+            if (targetReached == false)
             {
-                anim.SetBool("Chasing", true);
-                anim.SetBool("Patrolling", false);
-                state = State.Chasing;
+                transform.position = Vector3.MoveTowards(transform.position, currentTarget, speed * Time.deltaTime); // move to current target
             }
 
-            if (wayPoints.Count > 0) // are there waypoints?
+            if (currentTarget == wayPoints[0].position) // flip the sprite
             {
-                if (wayPoints[currentTarget] != null)// does the current target exist?
-                {
-                    transform.position = Vector3.MoveTowards(transform.position, wayPoints[currentTarget].position, speed * Time.deltaTime);
-                    float distance = Vector3.Distance(transform.position, wayPoints[currentTarget].position); // distance between target and enemy
-
-                    if (distance < 1.0f && targetReached == false)
-                    {
-                        if(currentTarget == 0 || currentTarget == wayPoints.Count - 1)
-                        {
-                            targetReached = true;
- 
-                            StartCoroutine(Idle());
-                        }
-                    }  
-                }
-
-                if (currentTarget == 0)
-                {
-                    _renderer.flipX = true;
-                }
-                else if (currentTarget == 1)
-                {
-                    _renderer.flipX = false;
-                }
-            }
-        }
-
-        IEnumerator Idle() // target reached is false, so resume the if statement in Patroling. 
-        {
-            anim.SetBool("Patrolling", false);
-            yield return new WaitForSeconds(2.0f);
-            anim.SetBool("Patrolling", true);
-
-            if (reversing == true) // if im at waypoint 1 and ready to go. 
-            {
-                currentTarget--;
                 _renderer.flipX = true;
-
-                if (currentTarget == 0) // there are no more waypoints to decrement. 
-                {
-                    reversing = false;
-                    currentTarget = 0; // set to zero
-                }
             }
-
-            else if (reversing == false)
+            else
             {
                 _renderer.flipX = false;
-                currentTarget++;
-
-                if (currentTarget == wayPoints.Count)  //if at the end of the waypoint list, reverse. 
-                {
-                    //made it to the end. reverse
-                    reversing = true;
-                    currentTarget--;
-                }
             }
 
-            targetReached = false;
+            if(transform.position == wayPoints[0].position) // do this when target reached
+            {
+                targetReached = true;
+                StartCoroutine(Idle());
+            }
+            else if(transform.position == wayPoints[1].position)
+            {
+                targetReached = true;
+                StartCoroutine(Idle());
+            }
+
+            if(distanceToPlayer < 10 && distanceToPlayer > 3)
+            {
+                state = State.Chasing;
+            }
         }
-    
+
+        IEnumerator Idle()
+        {
+            anim.SetBool("Idle", true);
+            anim.SetBool("Patrolling", false);
+            yield return new WaitForSeconds(Random.Range(2.0f, 4.5f)); //waits
+            anim.SetBool("Patrolling", true); // patrolling anim
+            anim.SetBool("Idle", false);
+         
+            
+            if (transform.position == wayPoints[0].position)
+            {
+                currentTarget = wayPoints[1].position;//target changes
+            }
+            else if(transform.position == wayPoints[1].position)
+            {
+                currentTarget = wayPoints[0].position;//target changes
+
+            }
+
+            targetReached = false; // will move now
+        }
 
         public virtual void Chasing()
         {
             hit = false;
-            float distanceToPlayer = Vector3.Distance(transform.position, player.transform.position);
 
             if (distanceToPlayer > 10)
             {
@@ -223,7 +200,9 @@ namespace PaperKiteStudio.DroppysWaterTrials
             }
 
             if(distanceToPlayer < 10 && distanceToPlayer > 3 && targetReached ==false)
-            {                
+            {
+                anim.SetBool("Chasing", true);
+                anim.SetBool("Patrolling", false);
                 if(player.transform.position.x > transform.position.x)
                 {
                     _renderer.flipX = false;

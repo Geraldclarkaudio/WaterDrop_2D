@@ -35,6 +35,7 @@ namespace PaperKiteStudio.DroppysWaterTrials
         private GameObject jumpEffect;
         [SerializeField]
         private ParticleSystem landEffect;
+ 
 
         // Start is called before the first frame update
         void Start()
